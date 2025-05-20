@@ -32,6 +32,11 @@ with open(path.join(csvDir, csvFile), 'r', encoding='utf-8-sig', errors='ignore'
         english_family = row['Family (English)']
         genus = row['Genus']
         species = row['Species (Scientific)']
+        
+        if '†' in genus:
+            is_extinct = True
+            genus = genus.replace('†', '').strip()
+
         if '†' in species:
             is_extinct = True
             species = species.replace('†', '').strip()
@@ -58,14 +63,13 @@ with open(path.join(csvDir, csvFile), 'r', encoding='utf-8-sig', errors='ignore'
         # If the species name is blank, skip this row
         if not species and not subspecies:
             continue
-
-        # Remove the extinction symbols
-        genus = genus.replace('†', '').strip()
-        species = species.replace('†', '').strip()
-        subspecies = subspecies.replace('†', '').strip()
         
-        # Add the genus and species name to the row
-        [row['Infraclass'], row['Parvclass'], row['Order'], row['Family (Scientific)'], row['Family (English)'], row['Genus'], row['Species (Scientific)']] = [last_infraclass, last_parvclass, last_order, last_family, last_english_family, last_genus, last_species]
+        # Add everything to the row
+        name_parts = filter(lambda x: x != None and x != '', [last_genus, last_species, subspecies])
+        fullName = ' '.join(name_parts)
+        scientificName = (fullName +  ' ' + row['Authority']).strip() # strip just in case
+        row['Full Name'] = fullName
+        [row['Infraclass'], row['Parvclass'], row['Order'], row['Family (Scientific)'], row['Family (English)'], row['Genus'], row['Species (Scientific)'], row['Canonical Scientific Name'], row['Full Scientific Name']] = [last_infraclass, last_parvclass, last_order, last_family, last_english_family, last_genus, last_species, fullName, scientificName]
         row["Comment"] = row["Comment"].strip()
         row["Extinct"] = is_extinct
 
@@ -74,9 +78,15 @@ with open(path.join(csvDir, csvFile), 'r', encoding='utf-8-sig', errors='ignore'
     # Write the new rows to a new CSV file
     print('Writing new CSV file...')
     with open(path.join(csvDir, csvFile.replace('.csv', '_cleaned.csv')), 'w', encoding='utf8', newline='', errors='ignore') as new_file:
-        fieldnames = reader.fieldnames.copy()  # make a copy to avoid modifying the original
-        if 'Extinct' not in fieldnames:
-            fieldnames.append('Extinct')
+        fieldnames = list(row.keys())
+
+        def move_item(lst, old_index, new_index):
+            item = lst.pop(old_index)
+            lst.insert(new_index, item)
+            return lst
+        fieldnames = move_item(fieldnames, fieldnames.index('Canonical Scientific Name'), fieldnames.index('Authority') + 1)
+        fieldnames = move_item(fieldnames, fieldnames.index('Full Scientific Name'), fieldnames.index('Authority') + 2)
+
         writer = csv.DictWriter(new_file, fieldnames=fieldnames)
         writer.writeheader()
         for row in new_rows:
